@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短信验证码发送工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="tel"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f8f8f8;
+            display: none;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 10px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>短信验证码发送工具</h1>
+        <div class="form-group">
+            <label for="phone">手机号码:</label>
+            <input type="tel" id="phone" placeholder="请输入手机号码" required>
+        </div>
+        <div class="form-group">
+            <label for="verifyCode">验证码 (可选，留空则自动生成):</label>
+            <input type="text" id="verifyCode" placeholder="请输入4位字母数字组合或留空">
+        </div>
+        <button id="sendBtn" onclick="sendSms()">发送验证码</button>
+        <div id="loading">发送中，请稍候...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // 加密函数
+        function encrypt(text, key) {
+            key = getSuitableKey(key);
+            const textUtf8 = CryptoJS.enc.Utf8.parse(text);
+            const keyUtf8 = CryptoJS.enc.Utf8.parse(key);
+            const iv = CryptoJS.enc.Utf8.parse('wNSOYIB1k1DjY5lA');
+
+            const encrypted = CryptoJS.AES.encrypt(textUtf8, keyUtf8, {
+                iv: iv,
+                mode: CryptoJS.mode.CBC,
+                padding: CryptoJS.pad.Pkcs7
+            });
+
+            return encrypted.toString();
+        }
+
+        // 处理密钥长度的函数
+        function getSuitableKey(key) {
+            return key.length > 16 ? key.slice(0, 16) : key;
+        }
+
+        // 生成随机4位验证码（数字字母组合）
+        function generateRandomCode(length = 4) {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        // 生成UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // 发送验证码
+        async function sendSms() {
+            const phoneInput = document.getElementById('phone');
+            const verifyCodeInput = document.getElementById('verifyCode');
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            const sendBtn = document.getElementById('sendBtn');
+
+            const phone = phoneInput.value.trim();
+            let verifyCode = verifyCodeInput.value.trim();
+
+            // 验证手机号
+            if (!phone || !/^1\d{10}$/.test(phone)) {
+                alert('请输入有效的手机号码！');
+                phoneInput.focus();
+                return;
+            }
+
+            // 生成随机验证码（如果未提供）
+            if (!verifyCode) {
+                verifyCode = generateRandomCode(4);
+                verifyCodeInput.value = verifyCode;
+            }
+
+            // 显示加载中状态
+            resultDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            sendBtn.disabled = true;
+
+            try {
+                const key = 'XFmi9GS2hzk98jGX';
+                const uuid = generateUUID();
+                
+                console.log('使用的UUID:', uuid);
+                console.log('使用的验证码:', verifyCode);
+                
+                const data = {
+                    operateType: "1",
+                    phone: phone,
+                    uuid: uuid,
+                    verifyCode: verifyCode
+                };
+
+                // 加密数据
+                const encryptedData = encrypt(JSON.stringify(data), key);
+
+                // 构造请求数据
+                const requestData = {
+                    func: "pc_send",
+                    clientId: "1001000021",
+                    param: encryptedData
+                };
+
+                // 发送请求
+                const response = await fetch('https://panservice.mail.wo.cn/api-user/sendMessageCodeBase', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Origin': 'https://pan.wo.cn',
+                        'Referer': 'https://pan.wo.cn/',
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const responseData = await response.json();
+                
+                // 显示结果
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<strong>请求结果:</strong>\n${JSON.stringify(responseData, null, 2)}`;
+                
+                if (responseData.RSP && responseData.RSP.RSP_CODE === '0000') {
+                    resultDiv.classList.add('success');
+                    resultDiv.classList.remove('error');
+                } else {
+                    resultDiv.classList.add('error');
+                    resultDiv.classList.remove('success');
+                }
+                
+            } catch (error) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<strong>发送失败:</strong>\n${error.message}`;
+                resultDiv.classList.add('error');
+                resultDiv.classList.remove('success');
+            } finally {
+                loadingDiv.style.display = 'none';
+                sendBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html> 
